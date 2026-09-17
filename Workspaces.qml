@@ -425,7 +425,10 @@ Ui.BarWidget {
                 root.moveWindowTo(cell.modelData.name)
               else root.focusWorkspace(cell.modelData.name)
             }
-            onWheelMoved: function(delta) { root.onWheel(delta) }
+            onWheel: function(wheel) {
+              root.onWheel(wheel.angleDelta.y)
+              wheel.accepted = true
+            }
           }
         }
       }
