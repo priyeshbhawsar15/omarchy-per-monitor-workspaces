@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "mmsbrggr.per-monitor-workspaces",
-  "name": "Per-monitor Workspaces",
-  "version": "1.2.0",
-  "author": "Marcel Moosbrugger",
+  "name": "Per-monitor Workspaces for Shibumi",
+  "version": "1.2.0-shibumi.1",
+  "author": "Marcel Moosbrugger and Priyesh Bhawsar",
   "license": "MIT",
-  "description": "Independent workspaces per monitor: SUPER+N always means this screen's Nth workspace",
+  "description": "Shibumi-native per-monitor workspaces: SUPER+N always means this screen's Nth workspace",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "Workspaces.qml"
   },
   "barWidget": {
-    "displayName": "Per-monitor Workspaces",
-    "description": "Workspace indicators scoped to the monitor each bar is on",
+    "displayName": "Per-monitor Workspaces for Shibumi",
+    "description": "Shibumi-styled workspace indicators scoped to the monitor each bar is on",
     "category": "Compositor",
     "allowMultiple": false,
     "defaultSection": "left",

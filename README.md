@@ -1,8 +1,15 @@
-# Per-monitor Workspaces for Omarchy
+# Per-monitor Workspaces for Shibumi
 
-Give every screen its own set of workspaces. `SUPER+3` always means *this
-screen's third workspace* — never "jump to whichever monitor happens to own
-workspace 3".
+Give every screen its own set of workspaces with a presentation that matches
+Shibumi's workspace pill, markers, color tokens, hover feedback, and tooltips.
+`SUPER+3` always means *this screen's third workspace* — never "jump to
+whichever monitor happens to own workspace 3".
+
+This is a Shibumi-only visual fork of
+[`mmsbrggr/omarchy-per-monitor-workspaces`](https://github.com/mmsbrggr/omarchy-per-monitor-workspaces).
+It preserves the upstream named-workspace model, hotplug handling, mouse
+controls, and Lua actions. The original project is MIT-licensed; its copyright
+and attribution are retained in [LICENSE](LICENSE).
 
 ![Two bars at the same moment: one screen sits on workspace 1, the laptop on workspace 4](docs/bar.png)
 
@@ -36,33 +43,28 @@ are handled — see [Unplugging a screen](#unplugging-a-screen).
 
 ## Requirements
 
-- Omarchy 4 (Quattro), using the built-in bar
-- Hyprland with the Lua config
+- Omarchy 4 (Quattro) with Shibumi Shell installed and active
+- Hyprland with the Lua configuration
 
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/mmsbrggr/omarchy-per-monitor-workspaces.git --enable
+omarchy plugin add https://github.com/priyeshbhawsar15/omarchy-per-monitor-workspaces.git --enable
 ```
 
-That is the whole feature: per-monitor workspaces, the bar indicators, and the
-screen handling when you dock. It takes the built-in workspace widget's place in
-your bar, and hands it back if you ever remove the plugin.
+This repository is intended for Shibumi Shell, not the stock Omarchy bar. Its
+widget needs the Shibumi State presentation library and must replace
+`hancore.shibumi.workspaces` in the active Shibumi layout. Use the managed,
+pinned installer in the accompanying personal setup repository rather than this
+mutable-HEAD example.
 
 ### Keyboard shortcuts
 
-Optional, and strongly recommended — without them `SUPER+N` keeps switching
-Omarchy's global workspaces, which is not what the dots show. The first time the
-widget runs without them, it offers:
+Shortcuts are required for `SUPER+N` to select the focused monitor's workspace.
+This fork deliberately does not offer a popup that edits `bindings.lua`; a
+reproducible installer should add and remove the binding with the feature.
 
-![A small popup offering to add keyboard shortcuts, with Add, Copy and Not now](docs/offer.png)
-
-**Add shortcuts** appends one line to `~/.config/hypr/bindings.lua`, **Copy
-line** hands it to you to place yourself, **Not now** declines and is not asked
-again. Nothing is written until you choose, the write only appends, and your
-previous file is kept as `bindings.lua.bak`.
-
-By hand, that line is:
+By hand, load the supplied shortcut module from `~/.config/hypr/bindings.lua`:
 
 ```lua
 pcall(dofile, os.getenv("HOME") .. "/.config/omarchy/plugins/mmsbrggr.per-monitor-workspaces/hypr/init.lua")
@@ -204,9 +206,10 @@ themselves alike; those get the connector appended to tell them apart.
 omarchy plugin remove mmsbrggr.per-monitor-workspaces
 ```
 
-Omarchy's built-in workspace widget goes back where this one was. Then remove the
-`pcall(dofile, ...)` line from `~/.config/hypr/bindings.lua`.
+Restore `hancore.shibumi.workspaces` to the Shibumi layout before removal, then
+remove the `pcall(dofile, ...)` line from `~/.config/hypr/bindings.lua`. The
+managed installer performs both actions and restores its backup.
 
 ## License
 
-MIT. The bar widget is derived from Omarchy's built-in workspace widget.
+MIT. The original bar widget is derived from Omarchy's built-in workspace widget.
