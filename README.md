@@ -142,8 +142,8 @@ rather than at the next reload.
 
 Use Shibumi Control Center → **Bars** → **Workspaces** to change this widget's
 appearance. The widget reads the active Shibumi profile's G2 appearance
-settings, so its fill color, content tone, opacity, and profile-specific
-geometry stay in sync with the familiar Workspaces editor.
+settings, so its fill color, content tone, and opacity stay in sync with the
+familiar Workspaces editor.
 
 This bridge deliberately shares visual settings only. The **workspaces per
 monitor** count remains the plugin's own setting above because it also controls

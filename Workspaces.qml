@@ -22,7 +22,7 @@ Ui.BarWidget {
 
   // Shibumi's existing Workspaces editor owns G2 appearance preferences.
   // This replacement intentionally consumes that public State service so its
-  // fill, tone, opacity, and geometry choices apply here as well. The slot
+  // fill, tone, and opacity choices apply here as well. The slot
   // count remains this widget's own Omarchy setting because it controls both
   // the visible dots and the Hyprland key bindings.
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
