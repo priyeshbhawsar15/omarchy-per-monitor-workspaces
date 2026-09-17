@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mmsbrggr.per-monitor-workspaces",
   "name": "Per-monitor Workspaces for Shibumi",
-  "version": "1.2.0-shibumi.2",
+  "version": "1.2.0-shibumi.3",
   "author": "Marcel Moosbrugger and Priyesh Bhawsar",
   "license": "MIT",
   "description": "Shibumi-native per-monitor workspaces: SUPER+N always means this screen's Nth workspace",

@@ -7,6 +7,7 @@ import Quickshell.Io
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // Per-monitor workspace indicator for the Shibumi bar.
 //
@@ -18,6 +19,31 @@ Ui.BarWidget {
   id: root
 
   moduleName: "mmsbrggr.per-monitor-workspaces"
+
+  // Shibumi's existing Workspaces editor owns G2 appearance preferences.
+  // This replacement intentionally consumes that public State service so its
+  // fill, tone, opacity, and geometry choices apply here as well. The slot
+  // count remains this widget's own Omarchy setting because it controls both
+  // the visible dots and the Hyprland key bindings.
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var shibumiState: suiteShell.serviceFor("hancore.shibumi.state")
+  readonly property var shibumiStateConfig: shibumiState && shibumiState.config
+    ? shibumiState.config : ({})
+  readonly property int shibumiStateRevision: shibumiState
+    && "revision" in shibumiState ? Number(shibumiState.revision) || 0 : 0
+  readonly property string shibumiAppearanceVariant: root.bar
+    && root.bar.layoutController && root.bar.layoutController.v2Mode === true
+      ? "v2" : "v1"
+  readonly property var workspaceAppearanceSettings: {
+    // Service calls can lose nested QML dependencies across the plugin
+    // boundary, so explicitly observe both State invalidation surfaces.
+    void(shibumiStateConfig)
+    void(shibumiStateRevision)
+    if (shibumiState && typeof shibumiState.groupSettingsForVariant === "function")
+      return shibumiState.groupSettingsForVariant(
+        "G2", root.shibumiAppearanceVariant)
+    return root.settings
+  }
 
   // ---------------------------------------------------------------- settings
 
@@ -258,7 +284,7 @@ Ui.BarWidget {
   readonly property bool tokenReady: root.tokens !== null
   readonly property color widgetInk: tokenReady
     && typeof root.tokens.widgetContentColor === "function"
-    ? root.tokens.widgetContentColor(root.settings,
+    ? root.tokens.widgetContentColor(root.workspaceAppearanceSettings,
       root.bar ? root.bar.urgent : Commons.Color.accent)
     : (root.bar ? root.bar.urgent : Commons.Color.accent)
   readonly property int workspacePadding: tokenReady
@@ -307,7 +333,7 @@ Ui.BarWidget {
         Presentation.PillSurface {
           tokenSource: root.tokens
           bar: root.bar
-          settings: root.settings
+          settings: root.workspaceAppearanceSettings
           v1AppearanceEnabled: true
           anchors.fill: parent
           anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
