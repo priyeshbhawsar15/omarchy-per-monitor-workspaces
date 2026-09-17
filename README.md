@@ -145,6 +145,10 @@ appearance. The widget reads the active Shibumi profile's G2 appearance
 settings, so its fill color, content tone, and opacity stay in sync with the
 familiar Workspaces editor.
 
+It also syncs Shibumi's **Marker Style** (Default, Numbers, Magic, Kanji, Frame,
+Aurora, Pacman) and **Visible Workspaces** mode (Ten, Five, Active only), rendering
+all 7 Shibumi workspace styles for per-monitor workspaces.
+
 This bridge deliberately shares visual settings only. The **workspaces per
 monitor** count remains the plugin's own setting above because it also controls
 Hyprland shortcuts. Shibumi's native workspace service must remain enabled: it

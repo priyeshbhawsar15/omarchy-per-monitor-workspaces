@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -45,9 +46,42 @@ Ui.BarWidget {
     return root.settings
   }
 
+  readonly property var shibumiWorkspaceConfig: shibumiStateConfig
+    && shibumiStateConfig.workspace ? shibumiStateConfig.workspace : null
+  readonly property string workspaceStyleSetting: {
+    void(shibumiStateConfig)
+    void(shibumiStateRevision)
+    let s = shibumiWorkspaceConfig ? String(shibumiWorkspaceConfig.style || "default") : "default"
+    if (s === "frame") s = "rings"
+    return s
+  }
+  readonly property string workspaceModeSetting: {
+    void(shibumiStateConfig)
+    void(shibumiStateRevision)
+    return shibumiWorkspaceConfig && ["10", "5", "active"].indexOf(String(shibumiWorkspaceConfig.mode || "")) !== -1
+      ? String(shibumiWorkspaceConfig.mode) : "10"
+  }
+  readonly property string renderStyle: workspaceStyleSetting
+
+  readonly property bool v2Mode: root.bar && root.bar.layoutController
+    ? root.bar.layoutController.v2Mode === true : false
+
+  readonly property real numberMarkerRadius: v2Mode
+    ? Commons.Style.space(10)
+    : tokens && tokens.presentation && tokens.presentation.radius === "small"
+      ? Commons.Style.space(5) : Commons.Style.space(10)
+
+  readonly property real frameMarkerRadius: v2Mode
+    ? Commons.Style.space(5)
+    : tokens && tokens.presentation && tokens.presentation.radius === "small"
+      ? Commons.Style.space(6) : Commons.Style.space(9)
+
   // ---------------------------------------------------------------- settings
 
   readonly property int slotCount: {
+    const mode = root.workspaceModeSetting
+    if (mode === "10") return 10
+    if (mode === "5") return 5
     const value = Number(root.setting("count", 5))
     return value > 0 ? Math.max(1, Math.floor(value)) : 5
   }
@@ -169,6 +203,17 @@ Ui.BarWidget {
   }
 
   readonly property var entries: root.buildEntries()
+  readonly property var displayedEntries: {
+    if (root.workspaceModeSetting !== "active") return root.entries
+    const items = root.entries
+    for (let index = 0; index < items.length; index++) {
+      const entry = items[index]
+      const focused = root.monitor !== null && root.monitor.activeWorkspace !== null
+        && String(root.monitor.activeWorkspace.name || "") === entry.name
+      if (focused) return [entry].concat(items.filter(function(item) { return item.parked }))
+    }
+    return items.length > 0 ? [items[0]].concat(items.filter(function(item) { return item.parked })) : []
+  }
 
   // --------------------------------------------------------------- actions
 
@@ -289,21 +334,44 @@ Ui.BarWidget {
     : (root.bar ? root.bar.urgent : Commons.Color.accent)
   readonly property int workspacePadding: tokenReady
     && typeof root.tokens.workspacePillPadding === "function"
-    ? root.tokens.workspacePillPadding("default") : Commons.Style.space(4)
-  readonly property int workspaceGap: tokenReady && root.tokens.contentGap !== undefined
-    ? root.tokens.contentGap : Commons.Style.space(5)
+    ? root.tokens.workspacePillPadding(root.renderStyle) : Commons.Style.space(4)
+  readonly property int workspaceGap: root.renderStyle === "rings"
+    ? Commons.Style.space(3)
+    : root.renderStyle === "aurora" ? Commons.Style.space(4)
+    : root.renderStyle === "pacman" ? Commons.Style.space(2)
+    : tokenReady && root.tokens.contentGap !== undefined
+      ? root.tokens.contentGap : Commons.Style.space(5)
   readonly property int markerHeight: Commons.Style.space(16)
   readonly property int markerWidth: Commons.Style.space(16)
   readonly property int focusedMarkerWidth: Commons.Style.space(32)
+  readonly property int focusedDisplayIndex: {
+    const items = root.displayedEntries
+    for (let index = 0; index < items.length; index++) {
+      const entry = items[index]
+      const focused = root.monitor !== null && root.monitor.activeWorkspace !== null
+        && String(root.monitor.activeWorkspace.name || "") === entry.name
+      if (focused) return index
+    }
+    return -1
+  }
+  readonly property var frameTarget: {
+    void(renderedWorkspaceCount)
+    return focusedDisplayIndex >= 0 ? workspaceRepeater.itemAt(focusedDisplayIndex) : null
+  }
   readonly property int renderedWorkspaceCount: workspaceRepeater.count
   readonly property real workspaceContentWidth: {
-    void(root.entries)
+    void(root.displayedEntries)
+    void(root.renderStyle)
     let total = 0
+    let visibleCount = 0
     for (let index = 0; index < workspaceRepeater.count; index++) {
       const item = workspaceRepeater.itemAt(index)
-      if (item) total += item.implicitWidth
+      if (item && item.implicitWidth > 0) {
+        total += item.implicitWidth
+        visibleCount++
+      }
     }
-    return total + Math.max(0, workspaceRepeater.count - 1) * root.workspaceGap
+    return total + Math.max(0, visibleCount - 1) * root.workspaceGap
   }
 
   implicitWidth: root.bar && root.bar.vertical
@@ -352,15 +420,86 @@ Ui.BarWidget {
       border.color: Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.20)
     }
 
+    Item {
+      id: frameMotion
+      z: 0
+      visible: root.renderStyle === "rings" && root.frameTarget !== null
+      x: workspaceRow.x + (root.frameTarget ? root.frameTarget.x : 0)
+        + (root.frameTarget ? (root.frameTarget.width - width) / 2 : 0)
+      anchors.verticalCenter: parent.verticalCenter
+      width: Commons.Style.space(18)
+      height: width
+
+      Behavior on x {
+        NumberAnimation { duration: 190; easing.type: Easing.OutCubic }
+      }
+
+      Shape {
+        id: frameShape
+        anchors.fill: parent
+        antialiasing: true
+        preferredRendererType: Shape.CurveRenderer
+        layer.enabled: true
+        layer.samples: 8
+        layer.smooth: true
+        layer.mipmap: true
+        layer.textureSize: Qt.size(
+          Math.ceil(width * 4), Math.ceil(height * 4))
+        readonly property real r: root.frameMarkerRadius
+
+        ShapePath {
+          strokeColor: root.widgetInk
+          strokeWidth: 1
+          fillColor: "transparent"
+          capStyle: ShapePath.FlatCap
+          joinStyle: ShapePath.RoundJoin
+          startX: frameShape.r
+          startY: 0.5
+          PathLine { x: frameShape.width - frameShape.r; y: 0.5 }
+          PathQuad {
+            x: frameShape.width - 0.5
+            y: frameShape.r
+            controlX: frameShape.width - 0.5
+            controlY: 0.5
+          }
+          PathLine {
+            x: frameShape.width - 0.5
+            y: frameShape.height - frameShape.r
+          }
+          PathQuad {
+            x: frameShape.width - frameShape.r
+            y: frameShape.height - 0.5
+            controlX: frameShape.width - 0.5
+            controlY: frameShape.height - 0.5
+          }
+          PathLine { x: frameShape.r; y: frameShape.height - 0.5 }
+          PathQuad {
+            x: 0.5
+            y: frameShape.height - frameShape.r
+            controlX: 0.5
+            controlY: frameShape.height - 0.5
+          }
+          PathLine { x: 0.5; y: frameShape.r }
+          PathQuad {
+            x: frameShape.r
+            y: 0.5
+            controlX: 0.5
+            controlY: 0.5
+          }
+        }
+      }
+    }
+
     Row {
       id: workspaceRow
+      z: 1
       anchors.centerIn: parent
       spacing: root.workspaceGap
       width: root.workspaceContentWidth
 
       Repeater {
         id: workspaceRepeater
-        model: root.entries
+        model: root.displayedEntries
 
         delegate: Item {
           id: cell
@@ -372,9 +511,19 @@ Ui.BarWidget {
             && root.monitor.activeWorkspace !== null
             && String(root.monitor.activeWorkspace.name || "") === modelData.name
           readonly property bool parked: modelData.parked === true
+          readonly property int numberWidth: Commons.Style.space(20)
 
-          implicitWidth: parked ? root.markerWidth
-            : (focused ? root.focusedMarkerWidth : root.markerWidth)
+          implicitWidth: cell.parked ? root.markerWidth
+            : root.renderStyle === "numbers" ? Commons.Style.space(22)
+            : root.renderStyle === "kanji" ? Commons.Style.space(22)
+            : root.renderStyle === "magic"
+              ? Commons.Style.space(cell.focused ? 20 : 18)
+            : root.renderStyle === "rings" ? Commons.Style.space(20)
+            : root.renderStyle === "aurora"
+              ? Commons.Style.space(cell.focused ? 34 : 12)
+            : root.renderStyle === "pacman"
+              ? Commons.Style.space(22)
+            : Commons.Style.space(cell.focused ? 32 : 16)
           implicitHeight: workspaceSurface.height
 
           Behavior on implicitWidth {
@@ -382,10 +531,11 @@ Ui.BarWidget {
           }
           Behavior on scale { NumberAnimation { duration: 120 } }
 
+          // --- DEFAULT STYLE ---
           Rectangle {
-            visible: !cell.parked
+            visible: !cell.parked && root.renderStyle === "default"
             anchors.centerIn: parent
-            width: cell.focused ? Commons.Style.space(34) : Commons.Style.space(16)
+            width: Commons.Style.space(cell.focused ? 34 : 16)
             height: root.markerHeight
             radius: height / 2
             color: Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b,
@@ -396,9 +546,9 @@ Ui.BarWidget {
           }
 
           Rectangle {
-            visible: !cell.parked
+            visible: !cell.parked && root.renderStyle === "default"
             anchors.centerIn: parent
-            width: cell.focused ? Commons.Style.space(26) : Commons.Style.space(8)
+            width: Commons.Style.space(cell.focused ? 26 : 8)
             height: Commons.Style.space(8)
             radius: height / 2
             color: cell.focused || cell.occupied ? root.widgetInk
@@ -408,6 +558,134 @@ Ui.BarWidget {
             }
           }
 
+          // --- NUMBERS STYLE ---
+          Rectangle {
+            visible: !cell.parked && root.renderStyle === "numbers"
+            anchors.centerIn: parent
+            width: cell.numberWidth
+            height: Commons.Style.space(20)
+            radius: root.numberMarkerRadius
+            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+              root.widgetInk.b,
+              cell.focused ? 0.30 : cell.occupied ? 0.12 : 0.04)
+
+            Text {
+              anchors.centerIn: parent
+              text: cell.modelData.label
+              color: cell.focused
+                ? root.widgetInk
+                : Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+                  root.widgetInk.b, cell.occupied ? 0.5 : 0.28)
+              font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+              font.pixelSize: cell.focused
+                ? Commons.Style.font.subtitle : (root.tokens ? root.tokens.labelSize : 12)
+              font.weight: cell.focused ? Font.Bold : Font.Normal
+              renderType: Text.NativeRendering
+            }
+          }
+
+          // --- MAGIC STYLE ---
+          Text {
+            visible: !cell.parked && root.renderStyle === "magic"
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: cell.focused ? 0 : 1
+            text: cell.focused ? "✦" : cell.occupied ? "✧" : "·"
+            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+              root.widgetInk.b, cell.focused ? 1 : cell.occupied ? 0.7 : 0.3)
+            font.family: "Adwaita Mono"
+            font.pixelSize: Commons.Style.space(cell.focused ? 22 : 18)
+            renderType: Text.NativeRendering
+
+            Behavior on color { ColorAnimation { duration: 200 } }
+          }
+
+          // --- KANJI STYLE ---
+          Text {
+            visible: !cell.parked && root.renderStyle === "kanji"
+            anchors.centerIn: parent
+            readonly property int indexVal: Number(cell.modelData.label) || 0
+            text: indexVal >= 1 && indexVal <= 10
+              ? ["一", "二", "三", "四", "五",
+                 "六", "七", "八", "九", "十"][indexVal - 1]
+              : String(cell.modelData.label)
+            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+              root.widgetInk.b, cell.focused ? 1 : cell.occupied ? 0.7 : 0.3)
+            font.family: "Noto Sans CJK JP"
+            font.pixelSize: Commons.Style.space(cell.focused ? 15 : 13)
+            font.weight: Font.Normal
+            renderType: Text.NativeRendering
+
+            Behavior on color { ColorAnimation { duration: 200 } }
+          }
+
+          // --- RINGS / FRAME STYLE ---
+          Text {
+            visible: !cell.parked && root.renderStyle === "rings"
+            anchors.centerIn: parent
+            text: cell.modelData.label
+            color: root.widgetInk
+            opacity: cellPointer.containsMouse ? 1
+              : cell.focused ? 1 : cell.occupied ? 0.64 : 0.24
+            font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.space(12)
+            font.weight: Font.Normal
+            font.hintingPreference: Font.PreferNoHinting
+            renderType: Text.QtRendering
+
+            Behavior on opacity {
+              NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+            }
+          }
+
+          // --- AURORA STYLE ---
+          Item {
+            visible: !cell.parked && root.renderStyle === "aurora"
+            anchors.centerIn: parent
+            width: Commons.Style.space(cell.focused ? 32 : 10)
+            height: Commons.Style.space(16)
+
+            Behavior on width {
+              NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            }
+
+            Rectangle {
+              anchors.centerIn: parent
+              width: Commons.Style.space(
+                cell.focused ? 28 : cell.occupied ? 6 : 4)
+              height: Commons.Style.space(
+                cell.focused ? 3 : cell.occupied ? 6 : 4)
+              radius: height / 2
+              color: root.widgetInk
+              opacity: cellPointer.containsMouse ? 1
+                : cell.focused ? 0.92 : cell.occupied ? 0.62 : 0.18
+              antialiasing: true
+
+              Behavior on width {
+                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+              }
+              Behavior on height {
+                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+              }
+              Behavior on opacity {
+                NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+              }
+            }
+          }
+
+          // --- PACMAN STYLE ---
+          Presentation.PacmanWorkspaceMarker {
+            visible: !cell.parked && root.renderStyle === "pacman"
+            anchors.centerIn: parent
+            focused: cell.focused
+            occupied: cell.occupied
+            hovered: cellPointer.containsMouse
+            activeColor: root.widgetInk
+            occupiedColor: root.widgetInk
+            emptyColor: root.widgetInk
+            hoverColor: root.widgetInk
+          }
+
+          // --- PARKED MARKER ---
           Rectangle {
             visible: cell.parked
             anchors.centerIn: parent
@@ -429,12 +707,15 @@ Ui.BarWidget {
           }
 
           MouseArea {
+            id: cellPointer
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onEntered: {
-              cell.scale = 1.15
+              cell.scale = root.renderStyle === "rings" ? 1
+                : root.renderStyle === "pacman" ? 1
+                : root.renderStyle === "aurora" ? 1.04 : 1.15
               if (root.bar && typeof root.bar.showTooltip === "function")
                 root.bar.showTooltip(workspaceSurface,
                   root.entryTooltip(cell.modelData, cell.occupied, cell.focused))
@@ -459,5 +740,6 @@ Ui.BarWidget {
         }
       }
     }
+
   }
 }
