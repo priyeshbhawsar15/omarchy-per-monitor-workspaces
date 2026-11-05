@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "mmsbrggr.per-monitor-workspaces",
   "name": "Per-monitor Workspaces for Shibumi",
-  "version": "1.2.0-shibumi.5",
+  "version": "1.3.0-shibumi.1",
   "author": "Marcel Moosbrugger and Priyesh Bhawsar",
   "license": "MIT",
-  "description": "Shibumi-native per-monitor workspaces: SUPER+N always means this screen's Nth workspace",
+  "description": "Shibumi-styled pill for Omarchy's per-monitor workspaces: each bar shows its own monitor's block",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Per-monitor Workspaces for Shibumi",
-    "description": "Shibumi-styled workspace indicators scoped to the monitor each bar is on",
+    "description": "Shibumi-styled workspace indicators for the monitor each bar is on",
     "category": "Compositor",
     "allowMultiple": false,
     "defaultSection": "left",
@@ -25,8 +25,8 @@
       {
         "key": "count",
         "type": "number",
-        "label": "Workspaces per monitor",
-        "description": "Slots each screen gets. The shortcuts in hypr/init.lua read this, so both stay in step.",
+        "label": "Workspaces shown per monitor",
+        "description": "Dots each bar shows. Omarchy gives every monitor ten; higher ones appear while they exist.",
         "defaultValue": 5
       }
     ]

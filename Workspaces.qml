@@ -12,9 +12,11 @@ import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // Per-monitor workspace indicator for the Shibumi bar.
 //
-// The workspace model remains upstream-compatible: every monitor owns named
-// workspaces (<display identity>:<slot>). This presentation deliberately uses
-// the same pill, marker geometry, color tokens, hover, and tooltip behavior as
+// Omarchy owns the workspaces: every monitor has a block of ten in Hyprland's
+// global numbering (see default/hypr/monitor-workspaces.lua), and its keys and
+// hotplug handling are Omarchy's. This widget only shows a monitor's own block,
+// numbered from 1. The presentation deliberately uses the same pill, marker
+// geometry, color tokens, hover, and tooltip behavior as
 // hancore.shibumi.workspaces.
 Ui.BarWidget {
   id: root
@@ -24,8 +26,7 @@ Ui.BarWidget {
   // Shibumi's existing Workspaces editor owns G2 appearance preferences.
   // This replacement intentionally consumes that public State service so its
   // fill, tone, and opacity choices apply here as well. The slot
-  // count remains this widget's own Omarchy setting because it controls both
-  // the visible dots and the Hyprland key bindings.
+  // count remains this widget's own Omarchy setting for the visible dots.
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   readonly property var shibumiState: suiteShell.serviceFor("hancore.shibumi.state")
   readonly property var shibumiStateConfig: shibumiState && shibumiState.config
@@ -85,44 +86,30 @@ Ui.BarWidget {
     const value = Number(root.setting("count", 5))
     return value > 0 ? Math.max(1, Math.floor(value)) : 5
   }
-  readonly property string home: Quickshell.env("HOME") || ""
-  readonly property string stateDir: home ? home + "/.local/state/omarchy" : ""
-  readonly property string configPath: stateDir
-    ? stateDir + "/" + root.moduleName + ".lua" : ""
+
+  // Connector -> block, from the file Omarchy's Hyprland config keeps them in.
+  readonly property int blockSize: 10
+  property var blocks: ({})
+
+  function readBlocks(text) {
+    const next = ({})
+    const lines = String(text || "").split("\n")
+    for (let index = 0; index < lines.length; index++) {
+      const fields = lines[index].split("\t")
+      if (fields.length >= 3 && fields[1] !== "")
+        next[fields[1]] = parseInt(fields[0], 10)
+    }
+    root.blocks = next
+  }
 
   FileView {
-    id: configFile
-    path: root.configPath
-    atomicWrites: true
+    path: (Quickshell.env("XDG_STATE_HOME")
+      || (Quickshell.env("HOME") + "/.local/state")) + "/omarchy/monitor-workspaces"
+    watchChanges: true
     printErrors: false
-    onSaved: {
-      root.publishedCount = root.slotCount
-      root.pushCount()
-    }
-    onSaveFailed: publishDefer.restart()
-  }
-
-  property int publishedCount: 0
-
-  function publishCount() {
-    if (root.configPath === "" || root.slotCount === root.publishedCount) return
-    configFile.setText("-- Written by Per-monitor Workspaces for Shibumi.\n"
-      + "-- Derived from the count setting in shell.json; do not edit here.\n"
-      + "return { count = " + root.slotCount + " }\n")
-  }
-
-  function pushCount() {
-    root.runLua("local pmw = _G.per_monitor_workspaces; "
-      + "if pmw and pmw.set_count then pmw.set_count(" + root.slotCount + ") end")
-  }
-
-  onSlotCountChanged: publishDefer.restart()
-  Component.onCompleted: publishDefer.restart()
-
-  Timer {
-    id: publishDefer
-    interval: 800
-    onTriggered: root.publishCount()
+    onFileChanged: reload()
+    onLoaded: root.readBlocks(text())
+    onLoadFailed: root.readBlocks("")
   }
 
   // --------------------------------------------------------------- monitor
@@ -131,24 +118,33 @@ Ui.BarWidget {
   readonly property var monitor: barWindow && barWindow.screen
     ? Hyprland.monitorFor(barWindow.screen) : null
 
-  // Match the Lua binding module: use display description to survive connector
-  // swaps, and append a connector only when two displays are indistinguishable.
-  readonly property string prefix: {
-    if (!root.monitor) return ""
-    const description = String(root.monitor.description || "")
-    if (description === "") return String(root.monitor.name || "")
+  readonly property string monitorName: root.monitor
+    ? String(root.monitor.name || "") : ""
 
-    const monitors = Hyprland.monitors.values || []
-    for (let index = 0; index < monitors.length; index++) {
-      if (monitors[index] !== root.monitor
-          && String(monitors[index].description || "") === description)
-        return description + "@" + String(root.monitor.name || "")
-    }
-    return description
+  // Until Omarchy has written the file, the workspace a monitor shows is in its
+  // own block.
+  readonly property int block: {
+    const known = root.blocks[root.monitorName]
+    if (known !== undefined) return known
+    const active = root.monitor && root.monitor.activeWorkspace
+      ? Number(root.monitor.activeWorkspace.id) : 0
+    return active > 0 ? Math.floor((active - 1) / root.blockSize) : 0
   }
 
   function slotName(slot) {
-    return root.prefix === "" ? "" : root.prefix + ":" + slot
+    return String(root.block * root.blockSize + slot)
+  }
+
+  // A workspace's slot in this monitor's block, or 0 when it is not one of ours.
+  function slotOfName(name) {
+    const id = Number(name)
+    if (!Number.isInteger(id) || id <= 0) return 0
+    if (Math.floor((id - 1) / root.blockSize) !== root.block) return 0
+    return (id - 1) % root.blockSize + 1
+  }
+
+  function workspaceSelector(name) {
+    return Number.isInteger(Number(name)) ? String(name) : "name:" + name
   }
 
   function workspaceByName(name) {
@@ -162,15 +158,12 @@ Ui.BarWidget {
   // --------------------------------------------------------------- workspace
 
   function parkedTooltip(name) {
-    const separator = name.lastIndexOf(":")
-    if (separator <= 0) return name
-    return name.substring(0, separator) + " · slot "
-      + name.substring(separator + 1)
+    return "Workspace " + name + " · from another monitor"
   }
 
   function buildEntries() {
     const items = []
-    if (root.prefix === "") return items
+    if (root.monitorName === "") return items
 
     const own = ({})
     for (let slot = 1; slot <= root.slotCount; slot++) {
@@ -179,8 +172,19 @@ Ui.BarWidget {
       items.push({ name: name, label: String(slot), tooltip: "", parked: false })
     }
 
-    const parked = []
+    // Slots past the count stay visible while they exist, so a window sent to
+    // one with Super+Shift+7 is not lost from the bar.
     const values = Hyprland.workspaces.values || []
+    for (let index = 0; index < values.length; index++) {
+      const name = String(values[index].name || "")
+      const slot = root.slotOfName(name)
+      if (slot === 0 || own[name]) continue
+      own[name] = true
+      items.push({ name: name, label: String(slot), tooltip: "", parked: false })
+    }
+    items.sort(function(left, right) { return Number(left.name) - Number(right.name) })
+
+    const parked = []
     for (let index = 0; index < values.length; index++) {
       const workspace = values[index]
       const name = String(workspace.name || "")
@@ -237,7 +241,7 @@ Ui.BarWidget {
   function focusHereLua(name) {
     return root.focusMonitorLua()
       + " hl.dispatch(hl.dsp.focus({ workspace = "
-      + root.quoteLua("name:" + name) + " }));"
+      + root.quoteLua(root.workspaceSelector(name)) + " }));"
   }
 
   function withOriginLua(body) {
@@ -247,6 +251,12 @@ Ui.BarWidget {
 
   function focusWorkspace(name) {
     if (!root.monitor || name === "") return
+    const slot = root.slotOfName(name)
+    if (slot > 0) {
+      Hyprland.dispatch("o.workspaces.focus(" + slot + ", "
+        + root.quoteLua(root.monitorName) + ")")
+      return
+    }
     root.runLua(root.focusHereLua(name))
   }
 
@@ -255,7 +265,7 @@ Ui.BarWidget {
     root.runLua("local window = hl.get_active_window(); if not window then return end; "
       + root.withOriginLua(root.focusMonitorLua()
         + " hl.dispatch(hl.dsp.window.move({ workspace = "
-        + root.quoteLua("name:" + name)
+        + root.quoteLua(root.workspaceSelector(name))
         + ", window = \"address:\" .. window.address, follow = false }));"))
   }
 
@@ -277,50 +287,6 @@ Ui.BarWidget {
     root.wheelAccumulator = wheel.remainder
     if (wheel.steps !== 0) root.cycleBy(wheel.steps > 0 ? -1 : 1)
   }
-
-  // --------------------------------------------------------------- hotplug
-
-  function showsOwnSlot() {
-    const active = root.monitor && root.monitor.activeWorkspace
-    if (!active) return false
-    const name = String(active.name || "")
-    for (let slot = 1; slot <= root.slotCount; slot++) {
-      if (name === root.slotName(slot)) return true
-    }
-    return false
-  }
-
-  function homeSlot() {
-    for (let slot = 1; slot <= root.slotCount; slot++) {
-      const name = root.slotName(slot)
-      if (root.workspaceByName(name) !== null) return name
-    }
-    return root.slotName(1)
-  }
-
-  function adopt() {
-    if (!root.monitor || root.prefix === "" || root.showsOwnSlot()) return
-    const name = root.homeSlot()
-    const workspace = root.workspaceByName(name)
-    const stranded = workspace !== null && workspace.monitor !== null
-      && workspace.monitor !== root.monitor
-
-    root.runLua(root.withOriginLua(
-      (stranded
-        ? "hl.dispatch(hl.dsp.workspace.move({ workspace = "
-          + root.quoteLua("name:" + name) + ", monitor = "
-          + root.quoteLua(root.monitor.name) + " })); "
-        : "") + root.focusHereLua(name)))
-  }
-
-  Timer {
-    id: adoptSettle
-    interval: 700
-    onTriggered: root.adopt()
-  }
-
-  onPrefixChanged: adoptSettle.restart()
-  onMonitorChanged: adoptSettle.restart()
 
   // --------------------------------------------------------------- Shibumi UI
 
